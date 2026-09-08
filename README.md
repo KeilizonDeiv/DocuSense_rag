@@ -1,4 +1,4 @@
-# 🤖 AI Document Intelligence Assistant
+# DocuSense
 
 A state-of-the-art **RAG (Retrieval Augmented Generation)** system that enables intelligent Q&A over your documents using vector embeddings, semantic search, and Claude AI.
 
