@@ -2,10 +2,12 @@
 
 import asyncio
 import logging
+import time
 from collections.abc import AsyncIterator
 
 import anthropic
 
+from app.services.quality import compute_answer_quality
 from app.services.query_rewriter import QueryRewriter
 from app.services.reranker import Reranker
 from app.services.vector_store import VectorStore
@@ -77,7 +79,9 @@ class RAGEngine:
             if search_query != question:
                 logger.info("Rewrote follow-up question for retrieval: %r -> %r", question, search_query)
 
+        retrieval_start = time.perf_counter()
         relevant_chunks = await self._retrieve(search_query, n_results, use_reranking, filter_dict)
+        retrieval_ms = int((time.perf_counter() - retrieval_start) * 1000)
 
         if not relevant_chunks:
             yield {"type": "sources", "sources": [], "retrieved_chunks": 0}
@@ -88,14 +92,27 @@ class RAGEngine:
             yield {"type": "done", "model": "none"}
             return
 
+        # Scored separately from the sources/citations themselves, and
+        # wrapped in its own try/except: this runs before the try/except
+        # that already guards Claude generation below, so a bug in this
+        # newer, less battle-tested scoring path should degrade to an
+        # absent quality panel rather than aborting the whole answer.
+        quality = None
+        try:
+            quality = compute_answer_quality(relevant_chunks, retrieval_ms)
+        except Exception:
+            logger.exception("Answer-quality scoring failed; omitting quality panel for this query")
+
         yield {
             "type": "sources",
             "sources": self._format_sources(relevant_chunks),
             "retrieved_chunks": len(relevant_chunks),
+            "quality": quality.model_dump() if quality else None,
         }
 
         context = self._build_context(relevant_chunks)
         answer_parts: list[str] = []
+        generation_start = time.perf_counter()
 
         if self.has_api:
             try:
@@ -107,14 +124,17 @@ class RAGEngine:
                 model = self.model
             except Exception as e:
                 logger.exception("Claude generation failed")
+                generation_ms = int((time.perf_counter() - generation_start) * 1000)
                 yield {"type": "error", "message": str(e)}
-                yield {"type": "done", "model": self.model}
+                yield {"type": "done", "model": self.model, "generation_ms": generation_ms}
                 return
         else:
             demo_answer = self._generate_demo_answer(question, relevant_chunks)
             answer_parts.append(demo_answer)
             yield {"type": "token", "text": demo_answer}
             model = "demo"
+
+        generation_ms = int((time.perf_counter() - generation_start) * 1000)
 
         answer = "".join(answer_parts)
         if conversation_context:
@@ -126,7 +146,7 @@ class RAGEngine:
                 }
             )
 
-        yield {"type": "done", "model": model}
+        yield {"type": "done", "model": model, "generation_ms": generation_ms}
 
     async def _retrieve(
         self,
