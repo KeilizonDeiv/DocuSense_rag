@@ -23,7 +23,13 @@ class DocumentChunk:
         self.chunk_id = chunk_id or self._generate_id(text, metadata)
 
     def _generate_id(self, text: str, metadata: dict) -> str:
-        content = f"{text}_{metadata.get('source', '')}_{metadata.get('chunk_num', 0)}"
+        # session_id must be part of the hash: two sessions uploading the
+        # same file (identical text, source, and chunk position) would
+        # otherwise collide on the same chunk_id. ChromaDB's add() treats
+        # that as an upsert keyed by id, so the second session's upload
+        # would silently vanish - it returns a normal success response, but
+        # the chunk never appears when that session queries its own data.
+        content = f"{text}_{metadata.get('source', '')}_{metadata.get('chunk_num', 0)}_{metadata.get('session_id', '')}"
         return hashlib.md5(content.encode()).hexdigest()
 
     def to_dict(self) -> dict:
