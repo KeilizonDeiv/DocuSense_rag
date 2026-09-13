@@ -62,6 +62,13 @@ async def test_stream_query_emits_sources_then_tokens_then_done():
 
     assert events[0]["type"] == "sources"
     assert events[0]["retrieved_chunks"] == 1
+    # This fixture's engine has no reranker configured, so despite
+    # stream_query's default use_reranking=True, _retrieve falls back to
+    # plain similarity search - quality must reflect what actually
+    # happened, not the requested flag.
+    assert events[0]["quality"]["confidence"] == "high"
+    assert events[0]["quality"]["explanation"].endswith("(based on semantic similarity only)")
+    assert events[0]["quality"]["retrieval_ms"] >= 0
 
     token_events = [e for e in events[1:-1]]
     assert all(e["type"] == "token" for e in token_events)
@@ -69,6 +76,7 @@ async def test_stream_query_emits_sources_then_tokens_then_done():
 
     assert events[-1]["type"] == "done"
     assert events[-1]["model"] == "claude-sonnet-5"
+    assert events[-1]["generation_ms"] >= 0
 
 
 @pytest.mark.anyio
