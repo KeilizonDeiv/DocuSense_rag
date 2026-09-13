@@ -1,0 +1,11 @@
+DocuSense Test Document
+
+DocuSense is an AI-powered document question-answering system. It uses
+retrieval augmented generation (RAG) to find relevant passages from
+uploaded documents and generate grounded answers using Claude.
+
+Key features include semantic search with vector embeddings, cross-encoder
+reranking for improved relevance, and a confidence panel that reports how
+well the retrieval step supported each answer.
+
+The system supports PDF, DOCX, TXT, and Markdown files up to 10MB each.
