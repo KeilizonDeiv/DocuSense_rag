@@ -20,12 +20,28 @@ class SourceCitation(BaseModel):
     paragraph: int | None = None
 
 
+class AnswerQuality(BaseModel):
+    """A cheap, heuristic self-assessment of retrieval quality for one query.
+
+    Not a rigorous groundedness metric - it's derived from reranker/embedding
+    similarity scores that already exist, meant to give a rough, honest
+    signal of "how well did retrieval do here", not a guarantee the answer
+    is fully correct.
+    """
+
+    confidence: Literal["high", "medium", "low"]
+    confidence_score: float
+    explanation: str
+    retrieval_ms: int
+
+
 class SourcesEvent(BaseModel):
     """First SSE event: the sources /api/query is about to answer from."""
 
     type: Literal["sources"] = "sources"
     sources: list[SourceCitation]
     retrieved_chunks: int
+    quality: AnswerQuality | None = None
 
 
 class TokenEvent(BaseModel):
@@ -40,6 +56,7 @@ class DoneEvent(BaseModel):
 
     type: Literal["done"] = "done"
     model: str
+    generation_ms: int | None = None
 
 
 class ErrorEvent(BaseModel):
