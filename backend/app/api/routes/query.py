@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 
 from app.api.deps import get_rag_engine, get_session_id, get_vector_store
 from app.core.exceptions import InvalidRequestError, NoDocumentsError
+from app.core.rate_limit import rate_limit_query
 from app.models.query import QueryRequest
 from app.services.rag_engine import RAGEngine
 from app.services.vector_store import VectorStore
@@ -22,7 +23,7 @@ async def _event_stream(rag_engine: RAGEngine, **kwargs) -> AsyncIterator[str]:
         yield _format_sse(event)
 
 
-@router.post("/api/query")
+@router.post("/api/query", dependencies=[Depends(rate_limit_query)])
 async def query(
     payload: QueryRequest,
     session_id: str = Depends(get_session_id),
